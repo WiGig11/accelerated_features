@@ -17,7 +17,7 @@ import numpy as np
 
 import pdb
 
-dev = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 configs = {
     'alike-t': {'c1': 8, 'c2': 16, 'c3': 32, 'c4': 64, 'dim': 64, 'single_head': True, 'radius': 2,

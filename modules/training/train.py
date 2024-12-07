@@ -30,7 +30,7 @@ def parse_arguments():
                         help='Gamma value for StepLR scheduler. Default is 0.5.')
     parser.add_argument('--training_res', type=lambda s: tuple(map(int, s.split(','))),
                         default=(800, 608), help='Training resolution as width,height. Default is (800, 608).')
-    parser.add_argument('--device_num', type=str, default='',
+    parser.add_argument('--device_num', type=str, default='1',
                         help='Device number to use for training. Default is "0".')
     parser.add_argument('--dry_run', action='store_true',
                         help='If set, perform a dry run training with a mini-batch for sanity check.')
@@ -84,7 +84,7 @@ class Trainer():
                        save_ckpt_every = 500,
                        coora = True,fusion = True):
 
-        self.dev = torch.device ('cuda:1' if torch.cuda.is_available() else 'cpu')
+        self.dev = torch.device ('cuda' if torch.cuda.is_available() else 'cpu')
         self.net = XFeatModel(coora = coora,fusion = fusion).to(self.dev)
 
         #Setup optimizer 

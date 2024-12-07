@@ -58,38 +58,44 @@ class CoorAtten(nn.Module):
 
 class FeatureFusionAttention(nn.Module):
     def __init__(self):
-        super().__init__()
-        self.pooler11 = nn.AvgPool2d(kernel_size = 3,stride = 2)
-        self.pooler12 = nn.MaxPool2d(kernel_size = 3,stride = 2) # refer to torch lib for tensor size calculation
-        self.pooler21 = nn.AvgPool2d(kernel_size = 3,stride = 2)
-        self.pooler22 = nn.MaxPool2d(kernel_size = 3,stride = 2) # refer to torch lib for tensor size calculation
-        self.conv1 = nn.Conv2d(256,64, kernel_size=4, stride=2, padding=0)
-        self.conv2 = nn.Conv2d(64,16, kernel_size=4, stride=2, padding=0)
-        
-        
-    def forward(self,w1,w2):
+        super(FeatureFusionAttention, self).__init__()
+        self.pooler11 = nn.AvgPool2d(kernel_size=3, stride=2)
+        self.pooler12 = nn.MaxPool2d(kernel_size=3, stride=2)
+        self.pooler21 = nn.AvgPool2d(kernel_size=3, stride=2)
+        self.pooler22 = nn.MaxPool2d(kernel_size=3, stride=2)
+        self.conv1 = nn.Conv2d(256, 64, kernel_size=4, stride=2, padding=0)
+        self.conv2 = nn.Conv2d(64, 16, kernel_size=4, stride=2, padding=0)
+        self.linear = None  # 初始化为 None
+    
+    def forward(self, w1, w2):
         pooled_flow11 = self.pooler11(w1)
         pooled_flow12 = self.pooler12(w1)
         pooled_flow21 = self.pooler21(w2)
         pooled_flow22 = self.pooler22(w2)
-        feature = torch.cat([pooled_flow22,pooled_flow21,pooled_flow12,pooled_flow11],dim = 1)
-        feature = self.conv2(self.conv1(feature)) #output should be a single para
-        b,_,_,_ = feature.shape
-        feature = feature.view(b,-1)
-        self.linear = self.build_linear(feature.shape[1],1)
+        feature = torch.cat([pooled_flow22, pooled_flow21, pooled_flow12, pooled_flow11], dim=1)
+        feature = self.conv2(self.conv1(feature))  # 输出形状为 [batch_size, 16, H, W]
+        b, _, _, _ = feature.shape
+        feature = feature.view(b, -1)  # 展平为 [batch_size, 16 * H * W]
+        
+        if self.linear is None:
+            # 动态创建线性层
+            self.linear = self.build_linear(feature.shape[1], 1).to(feature.device)
+            # 手动注册参数
+            self.add_module('linear', self.linear)
+        
         feature = self.linear(feature)
-        alpha = torch.sigmoid(feature)
-        alpha = alpha.view(alpha.size(0), 1, 1, 1)  # 形状变为 [10, 1, 1, 1]
-        return w1*alpha + w2 * (1-alpha)
+        alpha = torch.sigmoid(feature)  # 形状为 [batch_size, 1]
+        alpha = alpha.view(alpha.size(0), 1, 1, 1)  # 扩展为 [batch_size, 1, 1, 1]
+        return w1 * alpha + w2 * (1 - alpha)
     
     def build_linear(self, inp, oup):
         if inp > 256:
             outp1 = 256
             layer = nn.Sequential(
-				nn.Linear(inp, outp1),
-				nn.ReLU(),
-				nn.Linear(outp1, oup)
-			)
+                nn.Linear(inp, outp1),
+                nn.ReLU(),
+                nn.Linear(outp1, oup)
+            )
         else:
             layer = nn.Linear(inp, oup)
         return layer
