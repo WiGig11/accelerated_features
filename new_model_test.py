@@ -14,10 +14,10 @@ from modules.model import XFeatModel
 
 os.environ['CUDA_VISIBLE_DEVICES'] = 'cuda:1' #Force CPU, comment for GPU
 
-xfeat = XFeatModel(coora = False,fusion = False)
+xfeat = XFeatModel(coora = False,fusion = True)
 
 #Random input
-x = torch.randn(1,3,480,640)
+x = torch.randn(1,3,800,608)
 
 feats, keypoints, heatmap = xfeat(x)
 print("feats shape==============",feats.shape)

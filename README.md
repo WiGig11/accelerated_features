@@ -151,7 +151,17 @@ To reproduce the training setup from the paper, please follow the steps:
 {megadepth_root_path}/train_data/megadepth_indices #indices
 {megadepth_root_path}/MegaDepth_v1 #images & depth maps & poses
 ```
-3. Finally you can call training
+3. pull alike part via
+```bash
+git submodule update --init --recursive
+```
+
+3.5. if you wants more freedom,set 
+```python
+parser.add_argument('--device_num', type=str, default='',
+                        help='Device number to use for training. Default is "0".') for more gpu options
+```
+4. Finally you can call training
 ```bash
 python3 -m modules.training.train --training_type xfeat_default  --megadepth_root_path <path_to>/MegaDepth --synthetic_root_path <path_to>/coco_20k --ckpt_save_path /path/to/ckpts
 ```

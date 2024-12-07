@@ -30,12 +30,16 @@ def parse_arguments():
                         help='Gamma value for StepLR scheduler. Default is 0.5.')
     parser.add_argument('--training_res', type=lambda s: tuple(map(int, s.split(','))),
                         default=(800, 608), help='Training resolution as width,height. Default is (800, 608).')
-    parser.add_argument('--device_num', type=str, default='0',
+    parser.add_argument('--device_num', type=str, default='',
                         help='Device number to use for training. Default is "0".')
     parser.add_argument('--dry_run', action='store_true',
                         help='If set, perform a dry run training with a mini-batch for sanity check.')
     parser.add_argument('--save_ckpt_every', type=int, default=500,
                         help='Save checkpoints every N steps. Default is 500.')
+    parser.add_argument('--coora', action='store_true',
+                        help='Using coord Atten, Default is True')
+    parser.add_argument('--fusion', action='store_true',
+                        help='Using content guided attention fusion, Default is True')
 
     args = parser.parse_args()
 
@@ -77,10 +81,11 @@ class Trainer():
                        model_name = 'xfeat_default',
                        batch_size = 10, n_steps = 160_000, lr= 3e-4, gamma_steplr=0.5, 
                        training_res = (800, 608), device_num="0", dry_run = False,
-                       save_ckpt_every = 500):
+                       save_ckpt_every = 500,
+                       coora = True,fusion = True):
 
-        self.dev = torch.device ('cuda' if torch.cuda.is_available() else 'cpu')
-        self.net = XFeatModel().to(self.dev)
+        self.dev = torch.device ('cuda:1' if torch.cuda.is_available() else 'cpu')
+        self.net = XFeatModel(coora = coora,fusion = fusion).to(self.dev)
 
         #Setup optimizer 
         self.batch_size = batch_size
@@ -304,7 +309,9 @@ if __name__ == '__main__':
         training_res=args.training_res,
         device_num=args.device_num,
         dry_run=args.dry_run,
-        save_ckpt_every=args.save_ckpt_every
+        save_ckpt_every=args.save_ckpt_every,
+        coora = args.coora,
+        fusion = args.fusion
     )
 
     #The most fun part

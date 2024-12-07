@@ -79,6 +79,7 @@ class FeatureFusionAttention(nn.Module):
         self.linear = self.build_linear(feature.shape[1],1)
         feature = self.linear(feature)
         alpha = torch.sigmoid(feature)
+        alpha = alpha.view(alpha.size(0), 1, 1, 1)  # 形状变为 [10, 1, 1, 1]
         return w1*alpha + w2 * (1-alpha)
     
     def build_linear(self, inp, oup):
