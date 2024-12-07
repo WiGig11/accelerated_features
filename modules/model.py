@@ -24,21 +24,91 @@ class BasicLayer(nn.Module):
 	def forward(self, x):
 	  return self.layer(x)
 
+class CoorAtten(nn.Module):
+    def __init__(self, inp, r=16):
+        super().__init__()
+        self.h_pool = nn.AdaptiveAvgPool2d((None, 1))  # 新的东西
+        self.w_pool = nn.AdaptiveAvgPool2d((1, None))
+        self.conv1 = nn.Conv2d(inp, inp // r, kernel_size=1, stride=1, padding=0)
+        self.norm = nn.BatchNorm2d(inp // r)
+        self.nl = nn.ReLU6(inplace=True)
+        self.convh = nn.Conv2d(inp // r, inp, kernel_size=1, stride=1, padding=0)
+        self.convw = nn.Conv2d(inp // r, inp, kernel_size=1, stride=1, padding=0)
+        self.sig = nn.Sigmoid()
+
+    def forward(self, x):
+        # 无需显式地迁移到设备，所有层已经在初始化时迁移
+        b, c, h, w = x.shape
+        x_avg = self.h_pool(x)
+        y_avg = self.w_pool(x).permute(0, 1, 3, 2).contiguous()
+        f = torch.cat([x_avg, y_avg], dim=2)
+        f = self.conv1(f)
+        f = self.norm(f)
+        f = self.nl(f + 3) / 6
+        x_f, y_f = torch.split(f, [h, w], dim=2)
+        y_f = y_f.permute(0, 1, 3, 2).contiguous()
+        x_f = self.sig(self.convh(x_f))
+        y_f = self.sig(self.convw(y_f))
+        
+        x_f = x_f.expand(-1, -1, h, w)
+        y_f = y_f.expand(-1, -1, h, w)
+        y = x * x_f * y_f
+        return y
+
+
+class FeatureFusionAttention(nn.Module):
+    def __init__(self):
+        self.pooler11 = nn.AvgPool2d(kernel_size = 3,stride = 2)
+        self.pooler12 = nn.MaxPool2d(kernel_size = 3,stride = 2) # refer to torch lib for tensor size calculation
+        self.pooler21 = nn.AvgPool2d(kernel_size = 3,stride = 2)
+        self.pooler22 = nn.MaxPool2d(kernel_size = 3,stride = 2) # refer to torch lib for tensor size calculation
+        self.conv1 = nn.Conv2d(64,32, kernel_size=4, stride=2, padding=0)
+        self.conv2 = nn.Conv2d(32,16, kernel_size=4, stride=2, padding=0)
+        self.linear = nn.Linear(7*7*16,1)
+        
+    def forward(self,w1,w2):
+        pooled_flow11 = self.pooler11(w1)
+        pooled_flow12 = self.pooler12(w1)
+        pooled_flow21 = self.pooler21(w2)
+        pooled_flow22 = self.pooler22(w2)
+        feature = torch.cat([pooled_flow22,pooled_flow21,pooled_flow12,pooled_flow11],dim = 1)
+        feature = self.conv2(self.conv1(feature)) #output should be a single para
+        b,_,_,_ = feature.shape
+        feature = feature.view(b,-1)
+        feature = self.linear(feature)
+        alpha = nn.Sigmoid(feature)
+        return w1*alpha + w2 * (1-alpha)
+        
+
+class MultiScaleFeatureFusionDensePyramid(nn.Module):
+    def __init__(self):
+        self.conv1 = nn.Conv2d(64,64,kernel_size = 1,stride = 1,padding  = 0)
+        self.conv2 = nn.Conv2d(64,64,kernel_size = 1,stride = 1,padding  = 0)
+        self.conv3 = nn.Conv2d(64,64,kernel_size = 1,stride = 1,padding  = 0)
+        self.af4_5 = FeatureFusionAttention()
+        self.af45_3 = FeatureFusionAttention()
+
+    def forward(self,x3,x4,x5):
+        feats45_prime = self.af4_5(self.conv1(x4),self.conv2(x5))
+        res = self.af45_3(feats45_prime,self.conv3(x3))
+        return res
+
+
 class XFeatModel(nn.Module):
 	"""
 	   Implementation of architecture described in 
 	   "XFeat: Accelerated Features for Lightweight Image Matching, CVPR 2024."
 	"""
 
-	def __init__(self):
+	def __init__(self,coora = True,fusion = True):
 		super().__init__()
+		self.fusion = fusion
 		self.norm = nn.InstanceNorm2d(1)
 
 
 		########### ⬇️ CNN Backbone & Heads ⬇️ ###########
-
 		self.skip1 = nn.Sequential(	 nn.AvgPool2d(4, stride = 4),
-			  						 nn.Conv2d (1, 24, 1, stride = 1, padding=0) )
+									nn.Conv2d (1, 24, 1, stride = 1, padding=0) )
 
 		self.block1 = nn.Sequential(
 										BasicLayer( 1,  4, stride=1),
@@ -46,29 +116,56 @@ class XFeatModel(nn.Module):
 										BasicLayer( 8,  8, stride=1),
 										BasicLayer( 8, 24, stride=2),
 									)
+		if coora==True:
+			self.block2 = nn.Sequential(
+											CoorAtten( 24, r=8),
+											BasicLayer(24, 24, stride=1),
+											BasicLayer(24, 24, stride=1),
+										)
 
-		self.block2 = nn.Sequential(
-										BasicLayer(24, 24, stride=1),
-										BasicLayer(24, 24, stride=1),
-									 )
+			self.block3 = nn.Sequential(
+											CoorAtten( 24, r=8),
+											BasicLayer(24, 64, stride=2),
+											BasicLayer(64, 64, stride=1),
+											BasicLayer(64, 64, 1, padding=0),
+										)
+			self.block4 = nn.Sequential(
+											CoorAtten( 64, r=16),
+											BasicLayer(64, 64, stride=2),
+											BasicLayer(64, 64, stride=1),
+											BasicLayer(64, 64, stride=1),
+										)
 
-		self.block3 = nn.Sequential(
-										BasicLayer(24, 64, stride=2),
-										BasicLayer(64, 64, stride=1),
-										BasicLayer(64, 64, 1, padding=0),
-									 )
-		self.block4 = nn.Sequential(
-										BasicLayer(64, 64, stride=2),
-										BasicLayer(64, 64, stride=1),
-										BasicLayer(64, 64, stride=1),
-									 )
+			self.block5 = nn.Sequential(
+											CoorAtten(  64, r=16),
+											BasicLayer( 64, 128, stride=2),
+											BasicLayer(128, 128, stride=1),
+											BasicLayer(128, 128, stride=1),
+											BasicLayer(128,  64, 1, padding=0),
+										)
+		else:
+			self.block2 = nn.Sequential(
+											BasicLayer(24, 24, stride=1),
+											BasicLayer(24, 24, stride=1),
+										)
 
-		self.block5 = nn.Sequential(
-										BasicLayer( 64, 128, stride=2),
-										BasicLayer(128, 128, stride=1),
-										BasicLayer(128, 128, stride=1),
-										BasicLayer(128,  64, 1, padding=0),
-									 )
+			self.block3 = nn.Sequential(
+											BasicLayer(24, 64, stride=2),
+											BasicLayer(64, 64, stride=1),
+											BasicLayer(64, 64, 1, padding=0),
+										)
+			self.block4 = nn.Sequential(
+											BasicLayer(64, 64, stride=2),
+											BasicLayer(64, 64, stride=1),
+											BasicLayer(64, 64, stride=1),
+										)
+
+			self.block5 = nn.Sequential(
+											BasicLayer( 64, 128, stride=2),
+											BasicLayer(128, 128, stride=1),
+											BasicLayer(128, 128, stride=1),
+											BasicLayer(128,  64, 1, padding=0),
+										)
 
 		self.block_fusion =  nn.Sequential(
 										BasicLayer(64, 64, stride=1),
@@ -109,6 +206,8 @@ class XFeatModel(nn.Module):
 									  		nn.ReLU(inplace = True),
 											nn.Linear(512, 64),
 										)
+		if fusion==True:
+			self.fusioner = MultiScaleFeatureFusionDensePyramid()
 
 	def _unfold2d(self, x, ws = 2):
 		"""
@@ -145,7 +244,11 @@ class XFeatModel(nn.Module):
 		#pyramid fusion
 		x4 = F.interpolate(x4, (x3.shape[-2], x3.shape[-1]), mode='bilinear')
 		x5 = F.interpolate(x5, (x3.shape[-2], x3.shape[-1]), mode='bilinear')
-		feats = self.block_fusion( x3 + x4 + x5 )
+		if self.fusion:
+			feats = self.fusioner(x3,x4,x5)
+		else:
+			feats = (x3+x4+x5)
+		feats = self.block_fusion(feats)
 
 		#heads
 		heatmap = self.heatmap_head(feats) # Reliability map
