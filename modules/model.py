@@ -58,13 +58,14 @@ class CoorAtten(nn.Module):
 
 class FeatureFusionAttention(nn.Module):
     def __init__(self):
+        super().__init__()
         self.pooler11 = nn.AvgPool2d(kernel_size = 3,stride = 2)
         self.pooler12 = nn.MaxPool2d(kernel_size = 3,stride = 2) # refer to torch lib for tensor size calculation
         self.pooler21 = nn.AvgPool2d(kernel_size = 3,stride = 2)
         self.pooler22 = nn.MaxPool2d(kernel_size = 3,stride = 2) # refer to torch lib for tensor size calculation
-        self.conv1 = nn.Conv2d(64,32, kernel_size=4, stride=2, padding=0)
-        self.conv2 = nn.Conv2d(32,16, kernel_size=4, stride=2, padding=0)
-        self.linear = nn.Linear(7*7*16,1)
+        self.conv1 = nn.Conv2d(256,64, kernel_size=4, stride=2, padding=0)
+        self.conv2 = nn.Conv2d(64,16, kernel_size=4, stride=2, padding=0)
+        
         
     def forward(self,w1,w2):
         pooled_flow11 = self.pooler11(w1)
@@ -75,13 +76,28 @@ class FeatureFusionAttention(nn.Module):
         feature = self.conv2(self.conv1(feature)) #output should be a single para
         b,_,_,_ = feature.shape
         feature = feature.view(b,-1)
+        self.linear = self.build_linear(feature.shape[1],1)
         feature = self.linear(feature)
-        alpha = nn.Sigmoid(feature)
+        alpha = torch.sigmoid(feature)
         return w1*alpha + w2 * (1-alpha)
+    
+    def build_linear(self, inp, oup):
+        if inp > 256:
+            outp1 = 256
+            layer = nn.Sequential(
+				nn.Linear(inp, outp1),
+				nn.ReLU(),
+				nn.Linear(outp1, oup)
+			)
+        else:
+            layer = nn.Linear(inp, oup)
+        return layer
+
         
 
 class MultiScaleFeatureFusionDensePyramid(nn.Module):
     def __init__(self):
+        super().__init__()
         self.conv1 = nn.Conv2d(64,64,kernel_size = 1,stride = 1,padding  = 0)
         self.conv2 = nn.Conv2d(64,64,kernel_size = 1,stride = 1,padding  = 0)
         self.conv3 = nn.Conv2d(64,64,kernel_size = 1,stride = 1,padding  = 0)
