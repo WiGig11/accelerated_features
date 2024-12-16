@@ -8,21 +8,39 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
+from modules.wtconv import WTConv2d
 
 class BasicLayer(nn.Module):
 	"""
-	  Basic Convolutional Layer: Conv2d -> BatchNorm -> ReLU
+	Basic Convolutional Layer: Conv2d -> BatchNorm -> ReLU
 	"""
 	def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, dilation=1, bias=False):
 		super().__init__()
 		self.layer = nn.Sequential(
-									  nn.Conv2d( in_channels, out_channels, kernel_size, padding = padding, stride=stride, dilation=dilation, bias = bias),
-									  nn.BatchNorm2d(out_channels, affine=False),
-									  nn.ReLU(inplace = True),
+									nn.Conv2d( in_channels, out_channels, kernel_size, padding = padding, stride=stride, dilation=dilation, bias = bias),
+									nn.BatchNorm2d(out_channels, affine=False),
+									nn.ReLU(inplace = True),
 									)
 
 	def forward(self, x):
-	  return self.layer(x)
+		return self.layer(x)
+
+class BasicWTLayer(nn.Module):
+	"""
+	Basic Wavelet Convolutional Layer: Wavelet Conv2d -> BatchNorm -> ReLU
+	"""
+	def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding='same', dilation=1, bias=False):
+		super().__init__()
+		self.layer = nn.Sequential(
+									WTConv2d(in_channels, out_channels, padding = padding, kernel_size= kernel_size, stride=stride, bias = bias,wt_levels=2, wt_type='db1'),
+									#in_channels, out_channels, padding = 'same', kernel_size=5, stride=1, bias=True, wt_levels=1, wt_type='db1'
+									#nn.Conv2d( in_channels, out_channels, kernel_size, padding = padding, stride=stride, dilation=dilation, bias = bias),
+									nn.BatchNorm2d(out_channels, affine=False),
+									nn.ReLU(inplace = True),
+									)
+
+	def forward(self, x):
+		return self.layer(x)
 
 class CoorAtten(nn.Module):
     def __init__(self, inp, r=16):
@@ -123,9 +141,10 @@ class XFeatModel(nn.Module):
 	   "XFeat: Accelerated Features for Lightweight Image Matching, CVPR 2024."
 	"""
 
-	def __init__(self,coora = True,fusion = True):
+	def __init__(self,coora = True,fusion = True,wtconv = True):
 		super().__init__()
 		self.fusion = fusion
+		self.wtconv = wtconv
 		self.norm = nn.InstanceNorm2d(1)
 
 
@@ -203,13 +222,20 @@ class XFeatModel(nn.Module):
 										nn.Sigmoid()
 									)
 
-
-		self.keypoint_head = nn.Sequential(
-										BasicLayer(64, 64, 1, padding=0),
-										BasicLayer(64, 64, 1, padding=0),
-										BasicLayer(64, 64, 1, padding=0),
-										nn.Conv2d (64, 65, 1),
-									)
+		if self.wtconv == True:
+			self.keypoint_head = nn.Sequential(
+											BasicWTLayer(64, 64, 1, padding=0),
+											BasicWTLayer(64, 64, 1, padding=0),
+											BasicWTLayer(64, 64, 1, padding=0),
+											nn.Conv2d (64, 65, 1),
+										)
+		else:
+			self.keypoint_head = nn.Sequential(
+											BasicLayer(64, 64, 1, padding=0),
+											BasicLayer(64, 64, 1, padding=0),
+											BasicLayer(64, 64, 1, padding=0),
+											nn.Conv2d (64, 65, 1),
+										)
 
 
   		########### ⬇️ Fine Matcher MLP ⬇️ ###########

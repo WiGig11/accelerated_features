@@ -40,6 +40,8 @@ def parse_arguments():
                         help='Using coord Atten, Default is True')
     parser.add_argument('--fusion', action='store_true',
                         help='Using content guided attention fusion, Default is True')
+    parser.add_argument('--wtconv', action='store_true',
+                        help='Using Wavelet Conv, Default is True')
 
     args = parser.parse_args()
 
@@ -82,10 +84,10 @@ class Trainer():
                        batch_size = 10, n_steps = 160_000, lr= 3e-4, gamma_steplr=0.5, 
                        training_res = (800, 608), device_num="0", dry_run = False,
                        save_ckpt_every = 500,
-                       coora = True,fusion = True):
+                       coora = True,fusion = True,wtconv = True):
 
         self.dev = torch.device ('cuda' if torch.cuda.is_available() else 'cpu')
-        self.net = XFeatModel(coora = coora,fusion = fusion).to(self.dev)
+        self.net = XFeatModel(coora = coora,fusion = fusion,wtconv = wtconv).to(self.dev)
 
         #Setup optimizer 
         self.batch_size = batch_size
@@ -311,7 +313,8 @@ if __name__ == '__main__':
         dry_run=args.dry_run,
         save_ckpt_every=args.save_ckpt_every,
         coora = args.coora,
-        fusion = args.fusion
+        fusion = args.fusion,
+        wtconv = args.wtconv
     )
 
     #The most fun part
