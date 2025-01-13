@@ -259,7 +259,7 @@ if __name__ == '__main__':
     if args.matcher == 'xfeat':
         print("Running benchmark for XFeat..")
         from modules.xfeat import XFeat
-        xfeat = XFeat()
+        xfeat = XFeat(coora=False,fusion=True,wtconv=False,weights='/media/k1928-c/62969E754E94529B1/chz/accelerated_features/runs/fusion/xfeat_default_50.pth')
         run_pose_benchmark(matcher_fn = xfeat.match_xfeat, loader = loader, ransac_thr = args.ransac_thr)
 
     elif args.matcher == 'xfeat-star':

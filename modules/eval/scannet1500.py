@@ -312,8 +312,19 @@ class Scannet1500:
 
 def get_xfeat():
     from modules.xfeat import XFeat
-    xfeat = XFeat()
+    xfeat = XFeat(coora=False,fusion=False,wtconv=False,weights='/media/k1928-c/62969E754E94529B1/chz/accelerated_features/runs/origin/xfeat_default_100000.pth')
     return xfeat.match_xfeat
+
+def get_xfeat_coora():
+    from modules.xfeat import XFeat
+    xfeat = XFeat(coora=True,fusion=False,wtconv=False,weights='/media/k1928-c/62969E754E94529B1/chz/accelerated_features/runs/coora/xfeat_default_100000.pth')
+    return xfeat.match_xfeat
+
+def get_xfeat_wtconv():
+    from modules.xfeat import XFeat
+    xfeat = XFeat(coora=False,fusion=False,wtconv=True,weights='/media/k1928-c/62969E754E94529B1/chz/accelerated_features/runs/wtconv/xfeat_default_100000.pth')
+    return xfeat.match_xfeat
+
 
 def get_xfeat_star():
     from modules.xfeat import XFeat
@@ -359,8 +370,10 @@ if __name__ == "__main__":
 
         functions = {
             'xfeat': get_xfeat(),
-            'xfeat_star': get_xfeat_star(),
-            'alike': get_alike(),
+            'xfeatcoora': get_xfeat_coora(),
+            'xfeatwtconv': get_xfeat_wtconv(),
+            #'xfeat_star': get_xfeat_star(),
+            #'alike': get_alike(),
         }
 
         # save all results to a file

@@ -20,10 +20,11 @@ class XFeat(nn.Module):
 		It supports inference for both sparse and semi-dense feature extraction & matching.
 	"""
 
-	def __init__(self, weights = os.path.abspath(os.path.dirname(__file__)) + '/../weights/xfeat.pt', top_k = 4096, detection_threshold=0.05):
+	def __init__(self, coora,fusion,wtconv,weights = os.path.abspath(os.path.dirname(__file__)) + '/../runs/wtconv/xfeat_default_100000.pth', top_k = 4096, detection_threshold=0.05):
+	#def __init__(self, weights = os.path.abspath(os.path.dirname(__file__)) + '/../weights/xfeat.pt', top_k = 4096, detection_threshold=0.05):
 		super().__init__()
 		self.dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-		self.net = XFeatModel().to(self.dev).eval()
+		self.net = XFeatModel(coora = coora,fusion = fusion,wtconv = wtconv).to(self.dev).eval()
 		self.top_k = top_k
 		self.detection_threshold = detection_threshold
 
