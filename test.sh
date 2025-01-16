@@ -1,0 +1,2 @@
+python3 -m modules.eval.megadepth1500 --dataset-dir /media/k1928-c/62969E754E94529B1/chz/xfeat_data --matcher xfeat --ransac-thr 2.5
+python3 -m modules.eval.scannet1500 --scannet_path /media/k1928-c/62969E754E94529B1/chz/xfeat_data --output /media/k1928-c/62969E754E94529B1/chz/xfeat_data/output && python3 -m modules.eval.scannet1500 --scannet_path /media/k1928-c/62969E754E94529B1/chz/xfeat_data --output /media/k1928-c/62969E754E94529B1/chz/xfeat_data/output --show

@@ -161,3 +161,7 @@ cython_debug/
 
 #runs file
 /runs
+
+#test file
+/modules/eval/megadepth1500.py
+/modules/eval/scannet1500.py
