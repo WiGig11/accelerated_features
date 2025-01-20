@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import time
 from modules.wtconv import WTConv2d
+from modules.sconv import SpatialConvModule
 
 class BasicLayer(nn.Module):
 	"""
@@ -180,10 +181,12 @@ class XFeatModel(nn.Module):
 	   "XFeat: Accelerated Features for Lightweight Image Matching, CVPR 2024."
 	"""
 
-	def __init__(self,coora = True,fusion = True,wtconv = True):
+	def __init__(self,coora = True,fusion = True,wtconv = True,scnn = True,pe = True):
 		super().__init__()
 		self.fusion = fusion
 		self.wtconv = wtconv
+		self.scnn = scnn
+		self.pe = pe
 		self.norm = nn.InstanceNorm2d(1)
 
 
@@ -268,6 +271,12 @@ class XFeatModel(nn.Module):
 											BasicWTLayer(64, 64, 1, padding=0),
 											nn.Conv2d (64, 65, 1),
 										)
+		elif self.scnn == True:
+			self.keypoint_head = nn.Sequential(
+													#CoorAtten(  64, r=16),
+													SpatialConvModule(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1),
+													nn.Conv2d (64, 65, 1),
+												)
 		else:
 			self.keypoint_head = nn.Sequential(
 											BasicLayer(64, 64, 1, padding=0),
@@ -297,6 +306,20 @@ class XFeatModel(nn.Module):
 		if fusion==True:
 			self.fusioner = MultiScaleFeatureFusionDensePyramid()
 
+	def generate_positional_encoding(self,H, W, ws):
+		"""
+			generate sinudual PE
+			input:
+			H, W -- height width
+			ws -- window size
+		"""
+		num_encoding = ws ** 2# 计算编码的维度（通常是窗口大小的平方）
+		y, x = torch.meshgrid(torch.arange(H//ws), torch.arange(W//ws))  # 网格大小是 H//ws x W//ws# 创建网格
+		pe = torch.zeros(H // ws, W // ws, num_encoding)# 创建位置编码
+		for i in range(num_encoding):
+			pe[:, :, i] = torch.sin((x + y) / (10000 ** (i / num_encoding)))# 使用正弦和余弦函数生成位置编码
+		return pe
+
 	def _unfold2d(self, x, ws = 2):
 		"""
 			Unfolds tensor in 2D with desired ws (window size) and concat the channels
@@ -306,6 +329,16 @@ class XFeatModel(nn.Module):
 			.reshape(B, C, H//ws, W//ws, ws**2)
 		return x.permute(0, 1, 4, 2, 3).reshape(B, -1, H//ws, W//ws)
 
+	def _unfold2d_with_pe(self,x, ws=2):
+		"""
+			Unfolds tensor in 2D with desired ws (window size) and concat the channels and add PE
+		"""
+		B, C, H, W = x.shape
+		x_unfolded = x.unfold(2, ws, ws).unfold(3, ws, ws)\
+      				.reshape(B, C, H//ws, W//ws, ws**2)
+		pe = self.generate_positional_encoding(H, W, ws).unsqueeze(0).unsqueeze(0)  # 增加批量和通道维度
+		x_with_pe = x_unfolded + pe.to(x_unfolded.device)# 将位置编码添加到 unfold 后的张量中
+		return x_with_pe.permute(0, 1, 4, 2, 3).reshape(B, -1, H//ws, W//ws)# 调整维度顺序并展平
 
 	def forward(self, x):
 		"""
@@ -340,6 +373,9 @@ class XFeatModel(nn.Module):
 
 		#heads
 		heatmap = self.heatmap_head(feats) # Reliability map
-		keypoints = self.keypoint_head(self._unfold2d(x, ws=8)) #Keypoint map logits
+		if self.pe == True:
+			keypoints = self.keypoint_head(self._unfold2d_with_pe(x, ws=8)) #Keypoint map logits
+		else:
+			keypoints = self.keypoint_head(self._unfold2d(x, ws=8)) #Keypoint map logits
 
 		return feats, keypoints, heatmap

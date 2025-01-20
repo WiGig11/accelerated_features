@@ -42,7 +42,11 @@ def parse_arguments():
                         help='Using content guided attention fusion, Default is True')
     parser.add_argument('--wtconv', action='store_true',
                         help='Using Wavelet Conv, Default is True')
-
+    parser.add_argument('--scnn', action='store_true',
+                        help='Using SCNN conv, Default is True')
+    parser.add_argument('--pe', action='store_true',
+                        help='Using Positional Encoding, Default is True')
+    
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device_num
@@ -84,10 +88,10 @@ class Trainer():
                        batch_size = 10, n_steps = 160_000, lr= 3e-4, gamma_steplr=0.5, 
                        training_res = (800, 608), device_num="0", dry_run = False,
                        save_ckpt_every = 500,
-                       coora = True,fusion = True,wtconv = True):
+                       coora = True,fusion = True,wtconv = True,scnn = True,pe = True):
 
         self.dev = torch.device ('cuda' if torch.cuda.is_available() else 'cpu')
-        self.net = XFeatModel(coora = coora,fusion = fusion,wtconv = wtconv).to(self.dev)
+        self.net = XFeatModel(coora = coora,fusion = fusion,wtconv = wtconv,scnn = scnn,pe=pe).to(self.dev)
 
         #Setup optimizer 
         self.batch_size = batch_size
@@ -314,7 +318,9 @@ if __name__ == '__main__':
         save_ckpt_every=args.save_ckpt_every,
         coora = args.coora,
         fusion = args.fusion,
-        wtconv = args.wtconv
+        wtconv = args.wtconv,
+        scnn = args.scnn,
+        pe = args.pe
     )
 
     #The most fun part
